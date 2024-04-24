@@ -1,0 +1,21 @@
+			General
+Add an enum for the pin names to make things more managable.
+Make the degrees to mm.
+
+
+			Vibrate/Sweep
+Should we stop timers and laser power? Wait for other commands to finish?
+
+
+
+
+
+
+
+
+
+
+
+
+
+

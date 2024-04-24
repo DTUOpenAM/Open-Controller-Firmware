@@ -1,0 +1,25 @@
+Changes:
+
+Be able to change +15 -15 V (overlodningspad)
+Pinout 5Vin to teensy (remember to cut the pad on the back)
+
+Oxygen level pin in (molex?)
+
+extra molex GPIO analog one of them the other DAC.
+Seperate power board (h-bridge)
+Maybe not seperate power board if we have a good power supply?
+
+Motor control board (shield): Lad være med at give power med
+4 vibratorer (pwm til mosfet), 2xClearpath: step, dir, enable (digital signal).
+3 stepper motors (h-bridge boards).
+Power in.
+Ekstra shield?
+
+A22 og A21 skal på HW-685, og læse en strøm.
+Ændring! Vi skal have nogle andre analog sensorer på.
+
+
+læs op på hvad status signalerne betyder - er det en nemmere måde at læse mirrorets plads på?
+
+
+

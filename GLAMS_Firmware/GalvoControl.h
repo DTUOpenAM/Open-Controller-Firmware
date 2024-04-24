@@ -4,7 +4,6 @@
 #include <iostream>
 #include <string>
 #include <vector>
-#include <cmath>
 
 //------------------------------------------------------------------------------
 //VARIABLES
@@ -23,38 +22,6 @@ int tt = millis();
 double pwr_increments;
 double duty_increments;
 
-
-//------------------------------------------------------------------------------
-//Skywriting
-//------------------------------------------------------------------------------
-//#define SKYBUG
-bool Skywriting;
-bool previously_skywriting; //Were we using skywriting for the previous command
-bool contour = false;
-bool currently_launching = false;
-bool sky_time_end = false;
-volatile float skywriting_length, l;
-volatile float xA, yA, xB, yB, xC, yC, oldx, oldy, currentx, currenty; // position in mm
-int skytime = 1000;
-int nb_commands = 0;
-int extra_command = 0;
-int nb_launch = 0;
-int nb_doMove = 0;
-bool previous_bundle = false;
-
-typedef struct {
-  volatile float NEWX = 0;
-  volatile float NEWY = 0;
-  volatile uint32_t FREQ = 0; //frequency of trigger. Set to 50 kHz for now, add functionality later.
-  volatile uint8_t DUTY = 0; //dutycycle of trigger
-  volatile double PWR = 0; //Laser power
-  volatile int RMP = 0; //what ramping strategy is used 0 means none, 1 ramp power, 2 ramp duty cycle
-  volatile float FR = 0;
-}Command;
-
-long unsigned int time_end = 0;
-long unsigned int time_start = 0;
-
 //------------------------------------------------------------------------------
 //MOTION BUFFER
 //------------------------------------------------------------------------------
@@ -62,7 +29,6 @@ long unsigned int time_start = 0;
 #define  MAX_BUFLEN       (128) // How many commands can be saved in the motion buffer
 volatile int bufindexWRITE  = 1; // initialization of entry are we writing into the buffer 1 - MAX_BUFLEN
 volatile int bufindexREAD   = 1; // which entry are we reading from the buffer 1 - MAX_BUFLEN
-int prev_index = bufindexREAD;
 volatile int buflen         = 0; // current bufferlength = Number of entries in buffer
 volatile bool updating_buflen;
 volatile int oldbuflen         = 0;
@@ -137,7 +103,7 @@ double CURRENT_POS_X = 0;
 double CURRENT_POS_Y = 0;
 #endif
 #ifdef BRESENHAM
-volatile int CURRENT_POS_X = 0; //in step positions
+volatile int CURRENT_POS_X = 0;
 volatile int CURRENT_POS_Y = 0;
 volatile int PREV_POS_X = 0;
 volatile int PREV_POS_Y = 0;
@@ -171,9 +137,6 @@ typedef struct {
   volatile int rmp = 0; //what ramping strategy is used 0 means none, 1 ramp power, 2 ramp duty cycle
   volatile float fr = 200;
   bool stationary;
-  volatile bool CMD_BUNDLE; //alternating value btw launchmove() bundles used to know where to put delays
-  volatile bool CONTOUR;
-  volatile bool SKYWRITING;
 } Mirror;
 
 
@@ -186,11 +149,6 @@ IntervalTimer Timer1;
 
 AuxDev aux(POWER, TRIG, MAX_PWR, LASER_LUT); //set power pin (0-10v), trigger pin 0-24v ttl, maximal allowed power in W
 XY2_100 galvo;
-
-Command C1;
-Command C2;
-Command C3;
-
 
 //------------------------------------------------------------------------------
 //VOIDS
@@ -312,46 +270,7 @@ void StoreandResetDataFileString() {
   }
 }
 
-
-
-
-/** This function is used to calculate the coordinates of a point C based
- * on a calculated lenght and point A and B such that 
- * A-----B---C
- * **/
-void skywritingplanner(float xA, float yA,float xB, float yB, float _fr){
-  
-  // length we are adding from B to C in mm
-  skywriting_length = _fr * skytime/1000000; 
-  
-  l = sqrt(pow(xA-xB,2) + pow(yA-yB,2)) + skywriting_length;
-  xC = ((l*xB - skywriting_length*xA)/(l-skywriting_length));
-  yC = ((l*yB - skywriting_length*yA)/(l-skywriting_length));
-  
-  checkScannerPosition(xC, yC, _checkedposx, _checkedposy); //check if we're in the domain
-  xC = _checkedposx;
-  yC = _checkedposy;
-
-}
-
-
-
-
-/**
- * This function is called by planmove everytime a moves have been processed 
- * and ready to put in the buffer for execution
- * **/
-void prepMove(float _newx, float _newy, uint32_t freq, int _duty, int _pwr, int _rmp, float _fr) {
-
-  #ifdef SKYBUG
-  Serial.print("prepmove going to X = ");
-  Serial.print(_newx,4);
-  Serial.print(" , ");
-  Serial.print(_newy,4);
-  Serial.print("  Laser: ");
-  Serial.println(_duty);
-  #endif
-
+void planMove(float _newx, float _newy, uint32_t freq, int _duty, int _pwr, int _rmp, float _fr) {
 
   if (_newx == px && _newy == py) {
     m[bufindexWRITE][0].stationary = true;
@@ -359,37 +278,19 @@ void prepMove(float _newx, float _newy, uint32_t freq, int _duty, int _pwr, int 
     m[bufindexWRITE][0].stationary = false;
   }
 
-  //fr = _fr;
+  fr = _fr;
   m[bufindexWRITE][0].fr = _fr;
 
   m[bufindexWRITE][0].rmp = _rmp;
-  //pwr = _pwr; //store globally
+  pwr = _pwr; //store globally
 
   m[bufindexWRITE][0].pwr = _pwr;
   m[bufindexWRITE][0].duty = _duty;
-
-  // add contour attribute
-  if (contour){
-    m[bufindexWRITE][0].CONTOUR = true;
-  }
-  else{
-    m[bufindexWRITE][0].CONTOUR = false;
-  }
-
-  if (Skywriting){
-    m[bufindexWRITE][0].SKYWRITING = true;
-  }
-  else{
-    m[bufindexWRITE][0].SKYWRITING = false;
-  }
-
 
   //check frequency
   m[bufindexWRITE][0].freq = (freq > 0) ? freq : oldFreq; //check if the new
   oldFreq = m[bufindexWRITE][0].freq;
 
-
-  
 #ifdef BRESENHAM
 
   if ((1000000 / (STEPS_PER_MM * m[bufindexWRITE][0].fr)) < one_step_time_limit) {
@@ -398,7 +299,7 @@ void prepMove(float _newx, float _newy, uint32_t freq, int _duty, int _pwr, int 
 #if defined(Verbose_Serial)
     Serial.println("Feedrate set to maximum with high Res");
 #endif
-    
+
     step_factor = (m[bufindexWRITE][0].fr * one_step_time_limit * STEPS_PER_MM) / 1000000; // caclutates the factor between the
     step_factor = ceil(step_factor); //rounding up
     m[bufindexWRITE][0].RES = step_factor;
@@ -427,10 +328,9 @@ void prepMove(float _newx, float _newy, uint32_t freq, int _duty, int _pwr, int 
 
     m[bufindexWRITE][0].maxsteps = 0;//resets so they are not assumed from previous loop
 
-
-    //find current step position 
+    //find current position step
     m[bufindexWRITE][0].curPos = (int) round(ADJUSTED_CENTER_X + STEPS_PER_MM * px);
-    m[bufindexWRITE][1].curPos = (int) round(ADJUSTED_CENTER_Y + STEPS_PER_MM * py); //current step position along the Y-axis
+    m[bufindexWRITE][1].curPos = (int) round(ADJUSTED_CENTER_Y + STEPS_PER_MM * py);
 
     //find new pos step
     m[bufindexWRITE][0].newPos = (int) round(ADJUSTED_CENTER_X + STEPS_PER_MM * _newx);
@@ -474,8 +374,8 @@ void prepMove(float _newx, float _newy, uint32_t freq, int _duty, int _pwr, int 
 
   //disable interrupts briefly so the buflen is not overwritten from domove
   //noInterrupts();
-
-
+  m[bufindexWRITE][0].CMD_READY = true;
+  m[bufindexWRITE][0].FIRST = true;
   bufindexWRITE++; //increment buf so we write in next next time
   noInterrupts();
   buflen++; //increment buflen
@@ -484,319 +384,7 @@ void prepMove(float _newx, float _newy, uint32_t freq, int _duty, int _pwr, int 
     bufindexWRITE = 1;     //reset index if max is reached
   }
   storeScannerPosition_planMove(_newx, _newy);
-
 }
-
-
-
-/**
- * Authorizes the launch of the moves that have just been planned
- * The nb commands that have been launched together will be flagged in the same command bundle
- * This is usefull for the galvo settling delay
- * **/
-void launch_move(int nb){ 
-
-  nb_launch = nb;
-  currently_launching = true;
-  int j;
-  
-  // Authorize launch from last to first command so that it doesn't start launching when not everything is ready
-  j = bufindexWRITE-1;
-  for (int i = nb; i > 0 ; i--) {
-    if (j == 0){
-      j = MAX_BUFLEN;
-    }
-    m[j][0].CMD_READY = true;
-    
-    // each launch move bundle gets a bool assigned to it
-    if (previous_bundle == false){
-      m[j][0].CMD_BUNDLE = true;
-    }
-    else{
-      m[j][0].CMD_BUNDLE = false;
-    }
-    j--;
-  }
-
-  //set previous packet bool for next time
-  if (previous_bundle == false){
-    previous_bundle = true;
-  }
-  else{
-    previous_bundle = false;
-  }
-
-
-}
-
-
-
-/**
- * This function receives the commands that were read from serial COM and prepares the logic for the moves
- * **/
-void planMove(float _newx, float _newy, uint32_t freq, int _duty, int _pwr, int _rmp, float _fr){
-
-  Skywriting = aux.get_Skywriting();
-  if (Skywriting && (_newx != C1.NEWX || _newy != C1.NEWY)){ //Don't use command if it's exactly the same as the last one
-
-    previously_skywriting = true;
-    
-    if (nb_commands<1){ //get a 2nd command if it's the very first we're getting
-      C1.NEWX = _newx;
-      C1.NEWY = _newy;
-      C1.FREQ = freq;
-      C1.DUTY = _duty;
-      C1.PWR = _pwr;
-      C1.RMP = _rmp;
-      C1.FR = _fr;
-      nb_commands++;
-      m[bufindexWRITE][0].CMD_READY = false; //trigger request new serial command
-    #ifdef SKYBUG
-      Serial.println("REQUEST");
-    #endif
-    }
-
-    else{ // if it's not the very first command we got
-      C2.NEWX = _newx;
-      C2.NEWY = _newy;
-      C2.FREQ = freq;
-      C2.DUTY = _duty;
-      C2.PWR = _pwr;
-      C2.RMP = _rmp;
-      C2.FR = _fr;
-
-      m[bufindexWRITE][0].CMD_READY = true; // stop requesting commands
-
-
-      if (C1.DUTY > 0 && !contour && extra_command == 0){ //if Command 1 uses laser 
-        
-        skywritingplanner(C1.NEWX,C1.NEWY,px,py,C1.FR);//define skywriting start
-        
-        prepMove(xC,yC,0,0,0,0,C1.FR);//go to new starting position
-
-        launch_move(1);
-              
-        
-
-
-        if (C2.DUTY == 0){//C2 is a movement and not a contour:
-
-          skywritingplanner(oldx,oldy,C1.NEWX,C1.NEWY,C1.FR);
-
-          prepMove(oldx,oldy,C1.FREQ,0,0,C1.RMP,C1.FR);
-          prepMove(C1.NEWX,C1.NEWY,C1.FREQ,C1.DUTY,C1.PWR,C1.RMP,C1.FR); //first planned move
-          prepMove(xC,yC,C1.FREQ,0,0,C1.RMP,C1.FR); //end skywriting move
-
-          launch_move(3);
-
-        }
-        else{ //Command 1 and Command 2 use laser so it's a contour
-          contour = true;
-          prepMove(px,py,C1.FREQ,0,0,C1.RMP,C1.FR);
-          prepMove(C1.NEWX,C1.NEWY,C1.FREQ,C1.DUTY,C1.PWR,C1.RMP,C1.FR);
-          launch_move(2);
-        }
-
-        oldx = px;
-        oldy = py;
-      }
-
-      else if(C1.DUTY > 0 && contour && extra_command == 0){ // Command 1 uses laser, we are in a contour and we don't have a 3rd command
-        if (C2.DUTY > 0){ // Command 2 uses laser: just execute move continue contour
-          prepMove(C1.NEWX,C1.NEWY,C1.FREQ,C1.DUTY,C1.PWR,C1.RMP,C1.FR);
-          launch_move(1);
-          contour = true;
-          oldx = px;
-          oldy = py;
-        }
-        else{// Command 2 doesn't use laser: it's the end of the contour andd skywriting length
-          skywritingplanner(oldx,oldy,C1.NEWX,C1.NEWY,C1.FR);
-
-          prepMove(C1.NEWX,C1.NEWY,C1.FREQ,C1.DUTY,C1.PWR,C1.RMP,C1.FR);
-          prepMove(xC,yC,C1.FREQ,0,0,C1.RMP,C1.FR);
-
-          launch_move(2);
-          contour = false;
-
-        }
-      }
-
-      else{ //if Command 1 doesn't use laser
-        if (C2.DUTY>0 || extra_command > 0){ // Command 2 uses laser OR we have a 3rd Command that we requested
-
-          if (extra_command<1){ //we don't have 3rd command, go get it
-            C3 = C1; //store C1 in C3
-            //request new serial command
-            extra_command++;
-          }
-          
-          else{ // We have the 3rd command
-
-            C2.NEWX = _newx;
-            C2.NEWY = _newy;
-            C2.FREQ = freq;
-            C2.DUTY = _duty;
-            C2.PWR = _pwr;
-            C2.RMP = _rmp;
-            C2.FR = _fr;
-
-            // New command is in C2
-            // previous C1 is in C3
-            // previous C2 is in C1
-            // Order: C3 - C1 - C2
-
-            skywritingplanner(C1.NEWX,C1.NEWY,C3.NEWX,C3.NEWY,C1.FR); //starting part of the skywriting
-
-            prepMove(xC,yC,C3.FREQ,0,0,0,C3.FR); //prep movement and execute it
-
-            launch_move(1);
-
-
-
-            if (C2.DUTY>0){ //Command 2 uses laser: it's a contour
-              contour = true;
-              prepMove(C3.NEWX,C3.NEWY,C3.FREQ,0,0,C3.RMP,C3.FR);
-              prepMove(C1.NEWX,C1.NEWY,C1.FREQ,C1.DUTY,C1.PWR,C1.RMP,C1.FR);
-
-              launch_move(2);
-              
-              oldx = px;
-              oldy = py;
-            }
-
-            else{//no laser for C2
-              //end part skywriting
-
-              skywritingplanner(C3.NEWX,C3.NEWY,C1.NEWX,C1.NEWY,C1.FR);
-              
-              prepMove(C3.NEWX,C3.NEWY,C3.FREQ,0,0,C3.RMP,C3.FR);//first skywriting part
-              prepMove(C1.NEWX,C1.NEWY,C1.FREQ,C1.DUTY,C1.PWR,C1.RMP,C1.FR);//first planned move
-              prepMove(xC,yC,C1.FREQ,0,0,C1.RMP,C1.FR); //end skywriting move
-
-              launch_move(3);
-
-            }
-            extra_command = 0;
-          }
-
-        }
-        else{ //Command 1 and Commmand 2 don't use laser
-          prepMove(C1.NEWX,C1.NEWY,C1.FREQ,C1.DUTY,C1.PWR,C1.RMP,C1.FR); //Do C1 (go to beginning of C2)
-          launch_move(1);
-        }
-        
-       }
-
-    C1 = C2; // store C2 in C1 and start over
-
-    //}
-    }
-    m[bufindexWRITE][0].CMD_READY = false; //trigger request new command
-    #ifdef SKYBUG
-    Serial.println("REQUEST");
-    #endif
-    
-    
-
-
-    #ifdef SKYBUG
-    Serial.print("contour:     ");
-    for (int i = 1; i < 20; i++) {
-      Serial.print(String(m[i][0].CONTOUR)+" ");
-    }
-    Serial.println(" ");
-          Serial.print("CMD bundle:  ");
-          for (int i = 1; i < 20; i++) {
-            Serial.print(String(m[i][0].CMD_BUNDLE)+" ");
-          }
-          Serial.println(" ");
-    #endif
-
-  }
-
-
-  else if(!Skywriting){ //skywriting not activated
-
-    m[bufindexWRITE][0].CMD_READY = true; // stop requesting commands
-    
-
-    /////////////////////if Skywriting was previously on //////////////////////////
-
-
-    if (previously_skywriting && contour && _duty == 0){ //we were doing a contour and the new move doens't use laser: finish contour
-      Skywriting = true; // used so that prepmove assigns skywriting to these last moves
-      skywritingplanner(px,py,C1.NEWX,C1.NEWY,C1.FR);
-      prepMove(C1.NEWX,C1.NEWY,C1.FREQ,C1.DUTY,C1.PWR,C1.RMP,C1.PWR);
-      prepMove(xC,yC,C1.FREQ,0,0,C1.RMP,C1.FR); //end skywriting move
-      Skywriting = false;
-      launch_move(2);
-      contour = false;
-    }
-
-    else if(previously_skywriting && contour && _duty>0){ //if we we doing a contour and the next move the laser is still on (NOT CRUCIAL)
-      Skywriting = true;
-      prepMove(C1.NEWX,C1.NEWY,C1.FREQ,C1.DUTY,C1.PWR,C1.RMP,C1.FR);//last move in memory
-      Skywriting = false;
-      launch_move(1);
-      contour = false;
-    }
-
-    else if(previously_skywriting && extra_command>0 && _duty == 0){// we were in the case where we needed a C3 command
-      Skywriting = true;
-      skywritingplanner(C1.NEWX,C1.NEWY,C3.NEWX,C3.NEWY,C1.FR);
-      prepMove(xC,yC,C3.FREQ,0,0,0,C3.FR);
-
-      prepMove(C3.NEWX,C3.NEWY,C1.FREQ,0,0,C1.RMP,C1.FR);
-      prepMove(C1.NEWX,C1.NEWY,C1.FREQ,C1.DUTY,C1.PWR,C1.RMP,C1.FR);
-
-      skywritingplanner(C3.NEWX,C3.NEWY,C1.NEWX,C1.NEWY,C1.FR);
-      prepMove(xC,yC,C1.FREQ,0,0,C1.RMP,C1.FR); //end skywriting move
-      
-      Skywriting = false;
-      launch_move(4);
-      extra_command = 0;
-    }
-    else if(previously_skywriting && extra_command>0 && _duty > 0){// we were in the case where we needed a C3 command
-      Skywriting = true;
-      skywritingplanner(C1.NEWX,C1.NEWY,C3.NEWX,C3.NEWY,C1.FR);
-      prepMove(xC,yC,C3.FREQ,0,0,0,C3.FR);
-
-      prepMove(C3.NEWX,C3.NEWY,C1.FREQ,0,0,C1.RMP,C1.FR);
-      prepMove(C1.NEWX,C1.NEWY,C1.FREQ,C1.DUTY,C1.PWR,C1.RMP,C1.FR);
-      
-      Skywriting = false;
-      launch_move(3);
-      extra_command = 0;
-    }
-
-    else if(previously_skywriting && extra_command == 0 && !contour){ //Otherwise do this
-      Skywriting = true;
-      prepMove(C1.NEWX,C1.NEWY,C1.FREQ,C1.DUTY,C1.PWR,C1.RMP,C1.FR);//last move in memory
-      Skywriting = false;
-      launch_move(1);
-    }
-
-    previously_skywriting = false;
-    nb_commands = 0; // reset for skywriting process
-    
-
-
-    /////////////////////Normal non skywriting stuff //////////////////////////
-
-    //Always doing this:
-    prepMove(_newx,_newy,freq,_duty,_pwr,_rmp,_fr); // just do the move you reveived
-    launch_move(1);
-
-    
-    if (!currently_launching){
-      m[bufindexWRITE][0].CMD_READY = false; //trigger request new command
-      #ifdef SKYBUG
-      Serial.println("REQUEST");
-      #endif
-    }
-  }
-}
-
 
 void updateLaserPower(double _newPower, double _currentPower, bool _CommandReady) {
   //update laser power only if the next laser power is different from the previous
@@ -820,32 +408,19 @@ void updateMovePeriod(double _newMovePeriod, double _currentMoveperiod, bool _Co
 void LaserStartMoveOperations() {
 
   if (aux.is_the_laser_on() && startLaserWatchDog) {
-    //reset laser on-timer every time the laser is turned on - this is done to ensure the watchdog does not terminate the laser prematurelyy
+    //reset laser on-timer every time the laser is turned on - this is done to ensure the watchdog does not terminate the laser prematurely
     laser_on_timer = millis();
   }
 
   if (move_started && !inital_move_routine_completed) {
-    if(!sky_time_end){
-      updateLaserPower(m[bufindexREAD][0].pwr, aux.get_current_power(), m[bufindexREAD][0].CMD_READY);
-    }
-    
+
+    updateLaserPower(m[bufindexREAD][0].pwr, aux.get_current_power(), m[bufindexREAD][0].CMD_READY);
 
 #ifdef BRESENHAM
 
     updateMovePeriod(m[bufindexREAD][0].movePeriod, current_movePeriod, m[bufindexREAD][0].CMD_READY);
 
 #endif
-
-
-    if(m[bufindexREAD][0].SKYWRITING){
-        // take care of the circular buffer
-        if (bufindexREAD-1 == 0 && prev_index != bufindexREAD){prev_index = MAX_BUFLEN;}
-        else if (bufindexREAD-1 == 0 && prev_index == bufindexREAD){prev_index = bufindexREAD;}
-        else{prev_index = bufindexREAD-1;}
-
-    }
-
-
 
     if (m[bufindexREAD][0].stationary) {
       // if no scanner movements are required fo this command return now!
@@ -854,51 +429,31 @@ void LaserStartMoveOperations() {
       move_completed = true;
       return;
     }
-
-    else if ((!aux.is_the_laser_on() && m[bufindexREAD][0].duty > 0) || (m[bufindexREAD][0].SKYWRITING && m[prev_index][0].CMD_BUNDLE != m[bufindexREAD][0].CMD_BUNDLE && !m[prev_index][0].CONTOUR)) {
-      //if different packages and not a contour PAUSE to settle galvo
-
+    else if (!aux.is_the_laser_on() && m[bufindexREAD][0].duty > 0) {
       //if the laser is off and the dutycycle in this buf element is !0 ..
-      //if Skywriting is on and we are at the intersection between 2 command bundles and it's not a contour
 
-      //do nothing at the beginning of each laser on move so the scanner to allow it to settle
-      
-      //
+      // do nothing at the beginning of each laser on move so the scanner to allow it to settle
       if (!galvo_allowed_to_settle) {
+
         if (scanner_settling_timer == 0) {
           scanner_settling_timer = micros();
         }
 
         settling_timer_storage = micros() - scanner_settling_timer; // calculation since the move was started
-        
 
-        if (settling_timer_storage >= SCANNER_SETTLING_TIME || (m[bufindexREAD][0].SKYWRITING && !aux.is_the_laser_on() && m[bufindexREAD][0].duty > 0)) {
-          // Settling time bypassed if skywriting is on and we need to turn the laser on
+        if (settling_timer_storage >= SCANNER_SETTLING_TIME) {
+          //digitalWriteFast(LED_BUILTIN, HIGH);
           galvo_allowed_to_settle = true;
-
-          #ifdef SKYBUG
-            if ((m[bufindexREAD][0].SKYWRITING && !aux.is_the_laser_on() && m[bufindexREAD][0].duty > 0)){
-              Serial.println("settling delay bypassed");
-            }
-            else{
-              Serial.println("waited for settling delay");
-            }
-          #endif
         }
-        
-
-      } 
-      else { //when the scanner has been allowed to settle before a laser off to on movement
+      } else { //when the scanner has been allowed to settle before a laser off to on movement
 
         if (step_response_timer == 0) { // start timer allowing allowing the scanner response delay to pass before turning on the laser
           step_response_timer = micros();
         }
 
         timer_storage_step_response = micros() - step_response_timer; //calculation since move was started
-        
-        //STEP_RESPONSE_DELAY
-        if ((timer_storage_step_response >= STEP_RESPONSE_DELAY)) {
-          
+
+        if (timer_storage_step_response >= STEP_RESPONSE_DELAY || timer_storage_step_response >= STEP_RESPONSE_DELAY - STEP_RESPONSE_DELAY_OFFSET) {
           aux.trigLaser(m[bufindexREAD][0].freq, m[bufindexREAD][0].duty);  // .. turn laser on
           if (aux.is_the_laser_on() && LASER_STARTUP_DELAY > 0) {
             //small delay laser ramp up whileloop - should not make much havoc. allows accurate laser delay wait
@@ -911,8 +466,7 @@ void LaserStartMoveOperations() {
           return;
         }
       }
-    }
-    else { // if the laser should not turn on - realese the scanner movemements immediatly
+    } else { // if the laser should not turn on - realese the scanner movemements immediatly
       galvo_allowed_to_settle = true;
       inital_move_routine_completed = true;
       return;
@@ -923,6 +477,7 @@ void LaserStartMoveOperations() {
 void EndOfMoveOperations() {
 
   if (move_completed) {
+
     if (!m[bufindexREAD][0].stationary) {
 
       if (tracking_error_timer == 0) {
@@ -932,45 +487,30 @@ void EndOfMoveOperations() {
       // lookahead stuff to keep the laser off inbetween moves (typ within the contour)
       if (bufindexREAD == MAX_BUFLEN) { // if the buffer reaches max then look at the beginning of the next round
         look_ahead_variable = 1;
-      }  
-      else {
+      }  else {
         look_ahead_variable = bufindexREAD + 1;
       }
 
-      if ((aux.is_the_laser_on() && m[look_ahead_variable][0].duty > 0 && m[look_ahead_variable][0].CMD_READY && !laser_handled)) {
+      if (aux.is_the_laser_on() && m[look_ahead_variable][0].duty > 0 && m[look_ahead_variable][0].CMD_READY && !laser_handled) {
         //if next command is a laser move keep the laser on
         laser_handled = true;
-      }
+      } else {
 
-      else {
+        // turn off the laser
+        //start tracking error delay
 
-        if (m[bufindexREAD][0].SKYWRITING  && inital_move_routine_completed){
-          
-          if (m[bufindexREAD][0].duty > 0 && m[look_ahead_variable][0].duty == 0){
-            sky_time_end = true;
-          }
+        timer_storage = micros() - tracking_error_timer; //calculation since move signal was halted
+
+        if ((timer_storage >= TRACKING_DELAY || timer_storage >= TRACKING_DELAY - TRACKING_DELAY_OFFSET) && !laser_handled) {
+          //Serial.println("Tracking Delay: " + String(timer_storage));
+          aux.trigLaser(m[bufindexREAD][0].freq, 0); // turn the laser off
           laser_handled = true;
-
-        }
-        else if (!m[bufindexREAD][0].SKYWRITING){ //Skywriting is turned off 
-          // turn off the laser
-          //start tracking error delay
-          timer_storage = micros() - tracking_error_timer; //calculation since move signal was halted
-
-          
-          if (((timer_storage >= TRACKING_DELAY || timer_storage >= TRACKING_DELAY - TRACKING_DELAY_OFFSET) && !laser_handled)) {
-            //Serial.println("Tracking Delay: " + String(timer_storage));
-            aux.trigLaser(m[bufindexREAD][0].freq, 0); // turn the laser off
-            laser_handled = true;
-          }
         }
       }
     }
 
     if (laser_handled || m[bufindexREAD][0].stationary) {
-
       tracking_error_timer = 0;
-
       timer_storage = 0;
       step_response_timer = 0;
       timer_storage_step_response = 0;
@@ -980,52 +520,20 @@ void EndOfMoveOperations() {
 
       noInterrupts();
       inital_move_routine_completed = false;
-      //if (Skywriting){
-        m[bufindexREAD][0].CMD_READY = false; // current command is used, and will not be considered again
-      //}
-      
+      m[bufindexREAD][0].CMD_READY = false; // current command is used, and will not be considered again
       buflen--; //commands executed decrement buffer
-      
       move_completed = false; // toogles if any domove operations are allowed
       move_started = false; // toggles initial
       galvo_allowed_to_settle = false;
-
       bufindexREAD++; // move on to next command
-      
-      
-
       if (bufindexREAD == MAX_BUFLEN + 1) {
         bufindexREAD = 1;
       }
       interrupts();
 
-      //Serial.println("move completed");
+      // Serial.println("move completed");
 
     }
-  
-  }
-
-  // This is used for the end delay, keep it on regardless of position, TIME based
-  if (sky_time_end){
-
-    if (tracking_error_timer == 0) {
-        tracking_error_timer = micros();
-    }
-      // turn off the laser
-      //start tracking error delay
-      timer_storage = micros() - tracking_error_timer; //calculation since move signal was halted
-      
-      //TRACKING_DELAY
-      if (timer_storage >= TRACKING_DELAY || timer_storage >= TRACKING_DELAY - TRACKING_DELAY_OFFSET) {
-        
-        //time_end = time_end + 30;
-        //Serial.println("Tracking Delay: " + String(timer_storage));
-        aux.trigLaser(m[bufindexREAD][0].freq, 0); // turn the laser off
-        updateLaserPower(m[bufindexREAD][0].pwr, aux.get_current_power(), m[bufindexREAD][0].CMD_READY);
-        sky_time_end = false;
-
-      }
-    
   }
 }
 
@@ -1036,12 +544,11 @@ void doMove() {
   if (buflen > 0 && m[bufindexREAD][0].CMD_READY) {
 
     //----->>> begin trajectory logic
+
     if (!inital_move_routine_completed && !move_started) {
       move_started = true;
       return;
     }
-
-
 
 #ifdef BRESENHAM
 
@@ -1082,35 +589,10 @@ void doMove() {
         //Serial.println("end: X: " + String(CURRENT_POS_X) + " ; Y: " + String(CURRENT_POS_Y));
         move_completed = true;
         stepcount = 0; // reset stepcount for next round
-
-        #ifdef SKYBUG
-        Serial.println("doMove completed:  "+String((CURRENT_POS_X - ADJUSTED_CENTER_X)/STEPS_PER_MM)+" , "+String((CURRENT_POS_Y - ADJUSTED_CENTER_X)/STEPS_PER_MM));
-        #endif
-
-
-        if (currently_launching){
-          //Serial.println("doMove Status:  "+String(nb_launch)+" - "+String(nb_doMove)+" = "+String((nb_launch - nb_doMove)));
-          if((nb_launch - nb_doMove) == 0){
-            currently_launching = false;
-            nb_doMove = 0;
-            #ifdef SKYBUG
-            Serial.println("DONE");
-            Serial.println("REQUEST");
-            #endif
-            m[bufindexWRITE][0].CMD_READY = false;
-            
-          }
-          else{
-            nb_doMove++;
-            m[bufindexWRITE][0].CMD_READY = false;
-          }
-        }
-
-        
-        
       }
-   
+
 #endif
+
     }//<-- bracked ends the movement loop
   }
 }

@@ -1,5 +1,3 @@
-#include "Arduino.h"
-
 #ifndef PINS_H
 #define PINS_H
 //
@@ -27,13 +25,9 @@
 #endif
 
 #if defined(LOOP) || defined(BAXTER)
-#define TRIG 23 //Loop
-#define POWER A22 //Loop
-#define FAN A21 //Loop
-// #define TRIG A2 // just to test it on OPAL 
-// #define POWER A21 // just to test it on OPAL 
-// #define FAN A22 // delete this after
-
+#define TRIG 23
+#define POWER A22
+#define FAN A21
 #endif
 
 //Recirc

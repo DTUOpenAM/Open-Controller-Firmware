@@ -70,11 +70,11 @@ PROCESS_SENSOR SENS;
 float Kp = 0.002, Ki = 0.05, Kd = 0.001, Hz = 5;
 
 
-int output_bits = 8;
+int output_bits = 10;
 bool output_signed = false;
 
 FastPID PIDlib(Kp, Ki, Kd, Hz, output_bits, output_signed);
-bool setOutputConfig(output_bits);
+//bool setOutputConfig(output_bits, output_signed);
 
 //------------------------------------------------------------------------------
 // VOIDS
@@ -219,6 +219,7 @@ void setPointFlow(double stp) {
 void xflowPID() { //timed update xflow
   static unsigned long flowMillis = 0; //Bookkeeping variable
   static unsigned int flowUpdateDelay = 200;
+
   if (millis() - flowMillis  >= flowUpdateDelay ) { //time to update the pid controller
 
     flowSens = analogRead(SENS3);                //read from flow sensor
@@ -235,9 +236,10 @@ void xflowPID() { //timed update xflow
 
     PIDoutput = PIDlib.step(Setpoint, flowInput);
 
-    // Serial.print("Flow PID output: ");
-    // Serial.println(PIDoutput);
 
+    //Serial.print("Flow PID output: ");
+
+    //Serial.println(PIDoutput);
 #ifndef OPAL
     flow.setPower(PIDoutput);
 #endif
@@ -247,7 +249,6 @@ void xflowPID() { //timed update xflow
 
     flowMillis = millis();
   }
-
 }
 
 

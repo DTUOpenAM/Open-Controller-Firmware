@@ -55,12 +55,11 @@ char PLATFORM[] = "LOOP";
 #define OFFSET_GALVOB     (0) // FULLSCALEGALVO/2 - ADJUSTED_CENTER_B
 #define MAX_PWR           (300)
 #define LASER_STARTUP_DELAY (0) // how long in us does the galvo hold still before moving when a new laser commands is send
-#define TRACKING_DELAY (450) // Galvo laser tracking error delay in us 220 set to 450
+#define TRACKING_DELAY (250) // Galvo laser tracking error delay in us 220 set to 250
 #define TRACKING_DELAY_OFFSET (10) // offset for accepting tracking error timer
-#define STEP_RESPONSE_DELAY (400) // Galvo step response delay in us set to 430
+#define STEP_RESPONSE_DELAY (450) // Galvo step response delay in us set to 100
 #define STEP_RESPONSE_DELAY_OFFSET (10)
 #define SCANNER_SETTLING_TIME (100) // allow the scanner time to settle before commencing a new laser on movement
-#define UP2SPEED_TIME (800) //how much time it takes for the galvo to get up to speed
 #define X_MAX             (BUILDPLATE_DIAMETER/2)
 #define X_MIN             (-BUILDPLATE_DIAMETER/2)
 #define Y_MAX             (BUILDPLATE_DIAMETER/2)

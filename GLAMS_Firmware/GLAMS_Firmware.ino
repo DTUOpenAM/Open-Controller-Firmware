@@ -10,7 +10,7 @@
 
 //IMPORTANT: uncomment only the targeted platform
 
-#define VERSION                (03.16)
+#define VERSION                (03.15)
 
 ////---- WHAT MOVE ALGO TO USE? ----////
 #define BRESENHAM
@@ -28,7 +28,6 @@ bool enableChecksum = false; // enable checksum, befault is off, the gcode sende
 //#include "lookuptables.h"
 #include "misc.h"
 #include "Commands.h"
-
 
 //------------------------------------------------------------------------------
 // GLOBALS
@@ -73,7 +72,7 @@ void loop() {
   //Serial.println(micros()-looptimer);
   //looptimer = micros();
 
-  if ((buflen == 0) && (flushingBuffer == true)) { //if flushingBuffer is set true, wait until it is empty to resume accepting commands
+  if ((buflen == 0) && (flushingBuffer == true) ) { //if flushingBuffer is set true, wait until it is empty to resume accepting commands
 #ifdef SDCARD
     StoreandResetDataFileString();
 #endif
@@ -81,9 +80,7 @@ void loop() {
     flushingBuffer = false;
   }
 
-  if ((buflen <= MAX_BUFLEN) && (m[bufindexWRITE][0].CMD_READY == false) && ((bufindexREAD - bufindexWRITE + MAX_BUF-1) % MAX_BUF) > 5) { 
-    // if room in buffer and the current index does not already have a command + safeguard so that it doesn't overtake itself
-
+  if ((buflen <= MAX_BUFLEN) && (m[bufindexWRITE][0].CMD_READY == false)) { // if room in buffer and the current index does not already have a command
     //Serial.println("Reading Serial");
     readSerial();
   }
@@ -91,7 +88,6 @@ void loop() {
   if ((ready_sent == false) && (flushingBuffer == false) ) {
     ready();
   }
-
 
 #ifdef SDCARD
   storeToDataFileString();
@@ -112,8 +108,6 @@ void loop() {
   xflowPID();        //update flow control PID loop ok
   //sensors();         // Read the sensors ok
 #endif
-
-
 
 #ifdef machine_state_print
   if (oldbuflen == buflen) {

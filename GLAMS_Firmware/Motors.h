@@ -23,7 +23,11 @@ const int endRec = ESTP1;
 
 // Lead screw per step [mm] = 0.01.
 // Steps per mm:
+<<<<<<< HEAD
+long spmZ = 3250;  //microZ / 0.01;
+=======
 long spmZ = 3250; //microZ / 0.01;
+>>>>>>> eb76248c72cf6303bcbcdc7c7eb729e21903e031
 double spumZ = spmZ / 1000;
 
 long Zpos = 0;            // Z position in steps with mm input
@@ -326,7 +330,7 @@ void Powder(int Hopper, double NoDose, float PowderFeedrate, float PowderAcceler
       stepperP1.setPinsInverted (/*direction*/ true, /*step*/ false, /*enable*/ false);
       digitalWrite(ENABLE_1_2_3, LOW);    // Enable powder stepper
       delay(500);
-
+      
       DosingSteps = NoDose * sprP/3; //OneDose;
       int tempDose = round(DosingSteps);
       stepperP1.move(tempDose); //Loading powder
@@ -348,13 +352,20 @@ void Powder(int Hopper, double NoDose, float PowderFeedrate, float PowderAcceler
       Serial.print(". Doses: ");
       Serial.println(NoDose);
       
+      
     stepperP2.setPinsInverted (/*direction*/ false, /*step*/ false, /*enable*/ false);
     digitalWrite(ENABLE_1_2_3, LOW);    // Enable powder stepper
     delay(500);
 
+<<<<<<< HEAD
+      DosingSteps = NoDose * sprP/3;
+      int tempDose = round(DosingSteps);
+      stepperP2.move( tempDose ); //Loading powder
+=======
   
       int TempMove = DoseRotation*NoDose;
       stepperP2.move( TempMove ); //Loading powder
+>>>>>>> eb76248c72cf6303bcbcdc7c7eb729e21903e031
 
       while ((stepperP2.distanceToGo() != 0)) {
         stepperP2.run();  // Move Stepper into position
@@ -365,7 +376,8 @@ void Powder(int Hopper, double NoDose, float PowderFeedrate, float PowderAcceler
       Serial.println("Dispenser 2 is not active. Use M0");
     }
   }
-    else if (Hopper == 3){    // Both hoppers
+
+  else if (Hopper == 3){    // Both hoppers
     
         if (Hopper3Flag == true){
 

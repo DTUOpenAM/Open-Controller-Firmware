@@ -17,6 +17,7 @@ int sofar = 0;  // how much is in the buffer
 int pulses, freq, dur, Revolutions, duty;
 int NoDose; int Hopper; int DoseType; int PowderFeedrate; int PowderAcceleration; float posmm; float posum; float Zspeed_mm; float Zacceleration_mm; int motor = 0; float moveZ;
 int manual_feedrate; float recDistance; float recAcceleration; int inState; int outState; double stp; int xflow; int allState; int Materials; int HopperSelect;
+
 int Steps;
 
 bool moving_scanner = false;
@@ -64,8 +65,6 @@ void help() {// Display helpfull information should be updated to match function
   Serial.println("M21 Enable stepper motor");
   Serial.println("M22  Return endstop status");
   Serial.println("M30 Return sensor status");
-  Serial.println("M40 Disable skywriting");
-  Serial.println("M41 Enable skywriting");
   Serial.println("M100 Toogle Checksum");
   Serial.println("M114 Get current scanner position");
   Serial.println("M115 Print state machine");
@@ -167,11 +166,6 @@ void processCommand() {
                  parsenumber('P', pwr),
                  parsenumber('R', rmp),
                  parsenumber('F', fr));
-
-        ph = parsenumber('H', ph);
-        pwr = parsenumber('P', pwr);
-        rmp = parsenumber('R', rmp);
-        fr = parsenumber('F', fr);
         break;
 
       }
@@ -416,13 +410,6 @@ void processCommand() {
         Serial.println(buflen);
 #endif
         flushingBuffer = true;
-        if (aux.get_Skywriting()){
-          aux.set_Skywriting(false);
-          planMove(0,0,0,0,0,0,500);
-          launch_move(1);
-          aux.set_Skywriting(true);
-        }
-
         break;
       }
 
@@ -457,20 +444,6 @@ void processCommand() {
         Serial.println(analogRead(SENS2));
         Serial.print("Sensor 3: ");
         Serial.println(analogRead(SENS3));
-      }
-
-
-    case 40: {//disable Skywriting
-        aux.set_Skywriting(false);
-        Serial.println("Skywriting OFF");
-        break;
-      }
-
-
-    case 41: {//enable Skywriting
-        aux.set_Skywriting(true);
-        Serial.println("Skywriting ON");
-        break;
       }
 
     case 666: {//restart teensy
@@ -512,7 +485,6 @@ void processCommand() {
 #endif
         Serial.println("Current Position X: " + String(CURRENT_POS_X));
         Serial.println("Current Position y: " + String(CURRENT_POS_Y));
-        Serial.println("Skywriting: " + String(aux.get_Skywriting()));
         break;
       }
 
@@ -560,6 +532,7 @@ void processCommand() {
 
     case 4: { //Set flow SP
 #if defined(LOOP) || defined(BAXTER)
+
         setPointFlow(parsenumber('F', stp));
         Serial.println(stp);
 #endif

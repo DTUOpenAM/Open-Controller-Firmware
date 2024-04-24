@@ -16,7 +16,6 @@ void AuxDev::init() {
   _duty = 0;
   trigLaser(_freq, 0);
   setPower(0);
-  set_Skywriting(false);
 }
 
 void AuxDev::trigLaser(uint16_t _freq, int _duty) {
@@ -56,15 +55,6 @@ uint32_t AuxDev::get_current_laser_freq() {
 void AuxDev::set_next_duty(int _duty) {
   current_laser_duty  = _duty;
 }
-
-
-void AuxDev::set_Skywriting(bool _skywriting) {
-  SetSkywriting = _skywriting;
-}
-bool AuxDev::get_Skywriting() {
-  return SetSkywriting;
-}
-
 
 double AuxDev::setPower(double _setPwr) {
 

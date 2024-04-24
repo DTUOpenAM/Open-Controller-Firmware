@@ -35,7 +35,6 @@ class AuxDev {
     volatile int current_laser_duty;
     volatile uint32_t current_laser_frequency;
     volatile int last_laser_duty;
-    bool SetSkywriting;
     //struct lookuptable {uint16_t _setPwr; uint16_t _setPwrAnalogValue;};
 
   public:
@@ -53,9 +52,5 @@ class AuxDev {
     int get_last_duty();
     uint32_t get_current_laser_freq();
     void set_next_duty(int _duty);
-    
-    void set_Skywriting(bool _skywriting);
-    bool get_Skywriting();
-
 };
 #endif
